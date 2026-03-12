@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: cross-board-normalization
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8000
