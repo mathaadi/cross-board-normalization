@@ -64,7 +64,11 @@ def api_ingest_score(req: IngestScoreRequest, db: Session = Depends(get_db)):
         student_name=req.student_name,
         class_level=req.class_level,
         stream=req.stream,
+        stream_id=req.stream_id,
         recent_education=req.recent_education,
+        organization_id=req.organization_id,
+        course_id=req.course_id,
+        program_id=req.program_id,
     )
 
     bucket_label = record.year_bucket_rel.bucket_label if record.year_bucket_rel else "Unknown"
@@ -82,4 +86,7 @@ def api_ingest_score(req: IngestScoreRequest, db: Session = Depends(get_db)):
         percentage_score=record.percentage_score,
         year_bucket=bucket_label,
         message="Score ingested and statistics updated successfully",
+        organization_id=record.organization_id,
+        course_id=record.course_id,
+        program_id=record.program_id,
     )

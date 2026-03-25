@@ -5,6 +5,9 @@ import ScoreCalculator from './pages/ScoreCalculator';
 import BoardStatistics from './pages/BoardStatistics';
 import AdminPanel from './pages/AdminPanel';
 import StudentExplorer from './pages/StudentExplorer';
+import StudentDirectory from './pages/StudentDirectory';
+import AcademicRecord from './pages/AcademicRecord';
+import AcademicOCR from './pages/AcademicOCR';
 
 export default function App() {
   return (
@@ -17,7 +20,10 @@ export default function App() {
             <Route path="/calculator" element={<ScoreCalculator />} />
             <Route path="/statistics" element={<BoardStatistics />} />
             <Route path="/admin" element={<AdminPanel />} />
-            <Route path="/students" element={<StudentExplorer />} />
+            <Route path="/students" element={<StudentDirectory />} />
+            <Route path="/student-explorer" element={<StudentExplorer />} />
+            <Route path="/academic-record" element={<AcademicRecord />} />
+            <Route path="/academic-ocr" element={<AcademicOCR />} />
           </Routes>
         </main>
       </div>

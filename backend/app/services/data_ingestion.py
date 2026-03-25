@@ -20,7 +20,11 @@ def ingest_score(
     student_name: Optional[str] = None,
     class_level: str = "Class 12",
     stream: Optional[str] = None,
+    stream_id: Optional[int] = None,
     recent_education: Optional[str] = None,
+    organization_id: Optional[int] = None,
+    course_id: Optional[int] = None,
+    program_id: Optional[int] = None,
 ) -> StudentScore:
     """Validate and ingest a single marksheet record.
 
@@ -29,7 +33,7 @@ def ingest_score(
         2. Resolve board
         3. Assign year bucket
         4. Compute percentage
-        5. Store record (with student name, class level, stream)
+        5. Store record
         6. Update statistics incrementally
     """
 
@@ -56,12 +60,16 @@ def ingest_score(
     # ── Feature engineering ──────────────────────────────────────
     pct = compute_percentage(marks, max_marks)
 
+    # Resolve program_id from course_id if not explicitly provided
+    effective_program_id = program_id or course_id
+
     # ── Store ────────────────────────────────────────────────────
     record = StudentScore(
         student_name=student_name.strip() if student_name else None,
         board_id=board.board_id,
         class_level=class_level,
         stream=stream,
+        stream_id=stream_id,
         subject=subject.strip().title(),
         marks=marks,
         max_marks=max_marks,
@@ -69,6 +77,9 @@ def ingest_score(
         year_bucket_id=bucket.bucket_id,
         percentage_score=pct,
         recent_education=recent_education,
+        organization_id=organization_id,
+        course_id=effective_program_id,
+        program_id=effective_program_id,
     )
     db.add(record)
     db.commit()
