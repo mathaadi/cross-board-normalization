@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getStatsOverview, getBoardStats } from '../api/client';
+import { getStatsOverview, getBoardStats, getAnalyticsDashboardDistribution } from '../api/client';
 import StatCard from '../components/StatCard';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
     AreaChart, Area, PieChart, Pie,
 } from 'recharts';
 
@@ -26,12 +26,20 @@ export default function Dashboard() {
     const [overview, setOverview] = useState(null);
     const [stats, setStats] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [distData, setDistData] = useState(null);
 
     useEffect(() => {
         Promise.all([getStatsOverview(), getBoardStats()])
             .then(([ov, st]) => { setOverview(ov.data); setStats(st.data); })
             .catch(() => { })
             .finally(() => setLoading(false));
+    }, []);
+
+    // Fetch dashboard distribution data (NEW)
+    useEffect(() => {
+        getAnalyticsDashboardDistribution()
+            .then((r) => setDistData(r.data))
+            .catch(() => { });
     }, []);
 
     // Aggregate by board
@@ -91,66 +99,7 @@ export default function Dashboard() {
                 </div>
             )}
 
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Board mean scores */}
-                <div className="lg:col-span-2 card" style={{ padding: '20px' }}>
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff' }}>Board Performance</h2>
-                            <p style={{ fontSize: '0.6875rem', color: '#5a6a96', marginTop: 2 }}>Average mean score across all subjects & periods</p>
-                        </div>
-                        <span className="badge badge-indigo">All Time</span>
-                    </div>
-                    {boardAgg.length > 0 && (
-                        <ResponsiveContainer width="100%" height={280}>
-                            <BarChart data={boardAgg.sort((a, b) => b.avgMean - a.avgMean)} margin={{ top: 5, right: 10, left: -10, bottom: 60 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                                <XAxis dataKey="board" stroke="#5a6a96" fontSize={10} angle={-35} textAnchor="end" tickLine={false} />
-                                <YAxis stroke="#5a6a96" fontSize={10} domain={[0, 100]} tickLine={false} />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Bar dataKey="avgMean" name="Mean %" radius={[6, 6, 0, 0]} maxBarSize={45}>
-                                    {boardAgg.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    )}
-                </div>
-
-                {/* Subject Distribution */}
-                <div className="card" style={{ padding: '20px' }}>
-                    <h2 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff', marginBottom: 4 }}>Subject Coverage</h2>
-                    <p style={{ fontSize: '0.6875rem', color: '#5a6a96', marginBottom: 16 }}>Total samples by subject</p>
-                    {subjectAgg.length > 0 && (
-                        <ResponsiveContainer width="100%" height={240}>
-                            <PieChart>
-                                <Pie
-                                    data={subjectAgg}
-                                    dataKey="samples"
-                                    nameKey="subject"
-                                    cx="50%" cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={80}
-                                    strokeWidth={2}
-                                    stroke="#0c1428"
-                                >
-                                    {subjectAgg.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                                </Pie>
-                                <Tooltip content={<CustomTooltip />} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    )}
-                    {/* Legend */}
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-                        {subjectAgg.map((s, i) => (
-                            <span key={s.subject} className="flex items-center gap-1.5" style={{ fontSize: '0.625rem', color: '#5a6a96' }}>
-                                <span style={{ width: 7, height: 7, borderRadius: 2, background: COLORS[i % COLORS.length], display: 'inline-block' }} />
-                                {s.subject}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            </div>
+            {/* Old charts row removed as requested */}
 
             {/* Board leaderboard */}
             <div className="card overflow-hidden">
@@ -206,6 +155,97 @@ export default function Dashboard() {
                     </table>
                 </div>
             </div>
+
+            {/* ── Distribution Charts (NEW) ── */}
+            {distData && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in">
+                    {/* Board Distribution — Donut Chart */}
+                    <div className="card" style={{ padding: '20px' }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff' }}>Board Distribution</h2>
+                                <p style={{ fontSize: '0.6875rem', color: '#5a6a96', marginTop: 2 }}>Student proportion per board</p>
+                            </div>
+                            <span className="badge badge-indigo">Analytics</span>
+                        </div>
+                        {distData.board_distribution?.length > 0 && (
+                            <>
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <PieChart>
+                                        <Pie
+                                            data={distData.board_distribution}
+                                            dataKey="count"
+                                            nameKey="board"
+                                            cx="50%" cy="50%"
+                                            innerRadius={55}
+                                            outerRadius={90}
+                                            strokeWidth={2}
+                                            stroke="#0c1428"
+                                            label={({ board, percentage }) => `${board} (${percentage}%)`}
+                                            labelLine={{ stroke: '#5a6a96', strokeWidth: 1 }}
+                                        >
+                                            {distData.board_distribution.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                        </Pie>
+                                        <Tooltip content={<CustomTooltip />} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                                    {distData.board_distribution.map((b, i) => (
+                                        <span key={b.board} className="flex items-center gap-1.5" style={{ fontSize: '0.625rem', color: '#5a6a96' }}>
+                                            <span style={{ width: 7, height: 7, borderRadius: 2, background: COLORS[i % COLORS.length], display: 'inline-block' }} />
+                                            {b.board} ({b.count})
+                                        </span>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Stream Distribution Per Board — Stacked Bar Chart */}
+                    <div className="card" style={{ padding: '20px' }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff' }}>Stream Distribution by Board</h2>
+                                <p style={{ fontSize: '0.6875rem', color: '#5a6a96', marginTop: 2 }}>PCM · PCB · Commerce · Arts · General</p>
+                            </div>
+                            <span className="badge badge-indigo">Per Board</span>
+                        </div>
+                        {distData.stream_distribution?.length > 0 && (() => {
+                            // Flatten stream distribution into stacked bar data
+                            const allStreams = [...new Set(distData.stream_distribution.flatMap(b => b.streams.map(s => s.stream)))];
+                            const STREAM_COLORS = { 'General': '#6366f1', 'Science (PCM)': '#06b6d4', 'Science (PCB)': '#10b981', 'Commerce': '#f59e0b', 'Arts': '#f43f5e' };
+                            const barData = distData.stream_distribution.map(b => {
+                                const entry = { board: b.board.replace(' Board', '') };
+                                b.streams.forEach(s => { entry[s.stream] = s.count; });
+                                return entry;
+                            });
+                            return (
+                                <>
+                                    <ResponsiveContainer width="100%" height={280}>
+                                        <BarChart data={barData} margin={{ top: 5, right: 10, left: -10, bottom: 60 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                                            <XAxis dataKey="board" stroke="#5a6a96" fontSize={10} angle={-35} textAnchor="end" tickLine={false} />
+                                            <YAxis stroke="#5a6a96" fontSize={10} tickLine={false} />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            {allStreams.map((stream, i) => (
+                                                <Bar key={stream} dataKey={stream} name={stream} stackId="a" fill={STREAM_COLORS[stream] || COLORS[i % COLORS.length]} radius={i === allStreams.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+                                            ))}
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                                        {allStreams.map((stream, i) => (
+                                            <span key={stream} className="flex items-center gap-1.5" style={{ fontSize: '0.625rem', color: '#5a6a96' }}>
+                                                <span style={{ width: 7, height: 7, borderRadius: 2, background: STREAM_COLORS[stream] || COLORS[i % COLORS.length], display: 'inline-block' }} />
+                                                {stream}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

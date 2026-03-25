@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getBoardStats, getBoards } from '../api/client';
+import { getBoardStats, getBoards, getAnalyticsBoardStats, getAnalyticsDynamicStats } from '../api/client';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis,
+    BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis,
 } from 'recharts';
 
 const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#a855f7'];
@@ -22,11 +22,23 @@ const CustomTooltip = ({ active, payload }) => {
 export default function BoardStatistics() {
     const [stats, setStats] = useState([]);
     const [boards, setBoards] = useState([]);
+    const [boardInsights, setBoardInsights] = useState([]);
+    const [insightsLoading, setInsightsLoading] = useState(true);
+    const [dynamicGraphData, setDynamicGraphData] = useState(null);
+    const [graphsLoading, setGraphsLoading] = useState(false);
     const [filter, setFilter] = useState({ board: '', subject: '' });
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState('table');
 
     useEffect(() => { getBoards().then((r) => setBoards(r.data)); }, []);
+
+    // Fetch board-level insights (NEW)
+    useEffect(() => {
+        getAnalyticsBoardStats()
+            .then((r) => setBoardInsights(r.data))
+            .catch(() => { })
+            .finally(() => setInsightsLoading(false));
+    }, []);
 
     useEffect(() => {
         setLoading(true);
@@ -37,6 +49,17 @@ export default function BoardStatistics() {
             .then((r) => setStats(r.data))
             .catch(() => { })
             .finally(() => setLoading(false));
+
+        // Refetch dynamic graphs if BOTH board and subject are selected
+        if (filter.board && filter.subject) {
+            setGraphsLoading(true);
+            getAnalyticsDynamicStats(params)
+                .then((r) => setDynamicGraphData(r.data))
+                .catch(() => { })
+                .finally(() => setGraphsLoading(false));
+        } else {
+            setDynamicGraphData(null);
+        }
     }, [filter]);
 
     // Unique subjects
@@ -72,6 +95,63 @@ export default function BoardStatistics() {
                 </p>
             </div>
 
+            {/* ── Board Insights Section (NEW) ── */}
+            <div className="animate-fade-in">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: '1rem', fontWeight: 700, color: '#f0f4ff' }}>📊 Board Insights</span>
+                    <span className="badge badge-indigo" style={{ fontSize: '0.625rem' }}>Live</span>
+                </div>
+                {insightsLoading ? (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        {[...Array(4)].map((_, i) => <div key={i} className="h-28 skeleton" />)}
+                    </div>
+                ) : boardInsights.length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                        {boardInsights.map((b, i) => (
+                            <div key={b.board_name} className="card animate-fade-in" style={{
+                                padding: '16px 18px',
+                                animationDelay: `${i * 50}ms`,
+                                borderLeft: `3px solid ${COLORS[i % COLORS.length]}`,
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#f0f4ff' }}>{b.board_name}</span>
+                                    <span style={{
+                                        fontSize: '0.625rem', fontWeight: 600,
+                                        padding: '2px 8px', borderRadius: 6,
+                                        background: `${COLORS[i % COLORS.length]}15`,
+                                        color: COLORS[i % COLORS.length],
+                                    }}>
+                                        {b.avg_percentage.toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
+                                    <div>
+                                        <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#22d3ee' }}>{b.student_count}</div>
+                                        <div style={{ fontSize: '0.625rem', color: '#5a6a96', marginTop: 1 }}>Students</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#818cf8' }}>{b.subject_count}</div>
+                                        <div style={{ fontSize: '0.625rem', color: '#5a6a96', marginTop: 1 }}>Subjects</div>
+                                    </div>
+                                </div>
+                                {/* Avg % progress bar */}
+                                <div style={{ height: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 2, overflow: 'hidden' }}>
+                                    <div style={{
+                                        width: `${b.avg_percentage}%`, height: '100%', borderRadius: 2,
+                                        background: `linear-gradient(90deg, ${COLORS[i % COLORS.length]}, ${COLORS[(i + 2) % COLORS.length]})`,
+                                        transition: 'width 0.8s ease',
+                                    }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="card" style={{ padding: '30px 20px', textAlign: 'center' }}>
+                        <p style={{ color: '#5a6a96', fontSize: '0.8125rem' }}>No board data available</p>
+                    </div>
+                )}
+            </div>
+
             {/* Filters + View Toggle */}
             <div className="flex flex-wrap items-center gap-3 animate-fade-in">
                 <select
@@ -96,134 +176,62 @@ export default function BoardStatistics() {
                     {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
 
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 2 }}>
-                    {['table', 'chart'].map(v => (
-                        <button key={v} onClick={() => setView(v)}
-                            style={{
-                                padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                fontSize: '0.75rem', fontWeight: 600, fontFamily: 'Inter, sans-serif',
-                                background: view === v ? 'rgba(99,102,241,0.2)' : 'transparent',
-                                color: view === v ? '#818cf8' : '#5a6a96',
-                                transition: 'all 0.2s ease',
-                            }}>
-                            {v === 'table' ? 'Table' : 'Charts'}
-                        </button>
-                    ))}
-                </div>
             </div>
 
-            {loading ? (
-                <div className="space-y-3">
-                    {[...Array(5)].map((_, i) => <div key={i} className="h-12 skeleton" />)}
-                </div>
-            ) : stats.length === 0 ? (
-                <div className="card" style={{ padding: '60px 20px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '2rem', marginBottom: 8 }}>📭</p>
-                    <p style={{ color: '#5a6a96', fontSize: '0.875rem' }}>No statistics match your filters</p>
-                </div>
-            ) : view === 'table' ? (
-                /* ── Table View ─── */
-                <div className="card overflow-hidden animate-fade-in">
-                    <div className="overflow-x-auto" style={{ maxHeight: 520 }}>
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Board</th>
-                                    <th>Subject</th>
-                                    <th>Period</th>
-                                    <th style={{ textAlign: 'right' }}>Mean %</th>
-                                    <th style={{ textAlign: 'right' }}>Std Dev</th>
-                                    <th style={{ textAlign: 'right' }}>Samples</th>
-                                    <th style={{ width: 120 }}>Distribution</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {stats.slice(0, 100).map((s, i) => (
-                                    <tr key={i} className="animate-fade-in" style={{ animationDelay: `${Math.min(i * 15, 300)}ms` }}>
-                                        <td style={{ fontWeight: 600, color: '#f0f4ff', whiteSpace: 'nowrap' }}>{s.board_name}</td>
-                                        <td>
-                                            <span className="badge badge-indigo">{s.subject}</span>
-                                        </td>
-                                        <td style={{ whiteSpace: 'nowrap' }}>{s.year_bucket}</td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <span className="num-highlight" style={{ color: '#22d3ee', fontWeight: 700 }}>{s.mean_score.toFixed(1)}</span>
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <span className="num-highlight" style={{ color: '#818cf8' }}>{s.std_dev.toFixed(1)}</span>
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <span className="num-highlight" style={{ fontWeight: 500 }}>{s.sample_size}</span>
-                                        </td>
-                                        <td>
-                                            {/* Mini bar showing mean ± std range */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.04)', borderRadius: 3, position: 'relative', overflow: 'hidden' }}>
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        left: `${Math.max(s.mean_score - s.std_dev, 0)}%`,
-                                                        width: `${Math.min(s.std_dev * 2, 100 - Math.max(s.mean_score - s.std_dev, 0))}%`,
-                                                        height: '100%',
-                                                        background: COLORS[i % COLORS.length],
-                                                        borderRadius: 3, opacity: 0.5,
-                                                    }} />
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        left: `${s.mean_score}%`,
-                                                        width: 2, height: '100%',
-                                                        background: '#f0f4ff',
-                                                        borderRadius: 1,
-                                                    }} />
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    {stats.length > 100 && (
-                        <div style={{ padding: '10px 20px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.75rem', color: '#5a6a96', textAlign: 'center' }}>
-                            Showing 100 of {stats.length} results. Use filters to narrow down.
-                        </div>
-                    )}
-                </div>
-            ) : (
-                /* ── Chart View ─── */
-                <div className="space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {/* Board comparison */}
+            {/* ── Dynamic Graphs ── */}
+            {filter.board && filter.subject && dynamicGraphData ? (
+                <div className="space-y-6 animate-fade-in mt-6 mb-6">
+                    <h2 style={{ fontWeight: 800, fontSize: '1.25rem', color: '#f0f4ff' }}>
+                        Dynamic Analysis: {filter.board} - {filter.subject}
+                    </h2>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                        {/* Trend Line Chart */}
                         <div className="card" style={{ padding: '20px' }}>
-                            <h3 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff', marginBottom: 16 }}>Average Mean by Board</h3>
-                            <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={boardChartData} margin={{ top: 5, right: 10, left: -10, bottom: 60 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                                    <XAxis dataKey="board" stroke="#5a6a96" fontSize={10} angle={-35} textAnchor="end" tickLine={false} />
-                                    <YAxis stroke="#5a6a96" fontSize={10} domain={[0, 100]} tickLine={false} />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Bar dataKey="mean" name="Mean %" radius={[6, 6, 0, 0]} maxBarSize={40}>
-                                        {boardChartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                            <h3 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff', marginBottom: 16 }}>Performance Trend</h3>
+                            {graphsLoading ? (
+                                <div className="skeleton" style={{ height: 280 }} />
+                            ) : dynamicGraphData.trend.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={280}>
+                                    <LineChart data={dynamicGraphData.trend} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                                        <XAxis dataKey="year" stroke="#5a6a96" fontSize={10} tickLine={false} />
+                                        <YAxis stroke="#5a6a96" fontSize={10} domain={[0, 100]} tickLine={false} />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Line type="monotone" dataKey="mean" name="Mean %" stroke="#22d3ee" strokeWidth={3} dot={{ r: 4, fill: '#111c38', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <p style={{ color: '#5a6a96', fontSize: '0.8125rem' }}>No trend data available.</p>
+                            )}
                         </div>
 
-                        {/* Scatter: Mean vs StdDev */}
+                        {/* Distribution Bar Chart */}
                         <div className="card" style={{ padding: '20px' }}>
-                            <h3 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff', marginBottom: 16 }}>Mean vs Standard Deviation</h3>
-                            <ResponsiveContainer width="100%" height={300}>
-                                <ScatterChart margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                                    <XAxis dataKey="mean" name="Mean" stroke="#5a6a96" fontSize={10} domain={[0, 100]} tickLine={false} />
-                                    <YAxis dataKey="stdDev" name="Std Dev" stroke="#5a6a96" fontSize={10} tickLine={false} />
-                                    <ZAxis dataKey="samples" range={[30, 200]} />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Scatter data={scatterData} fill="#6366f1" fillOpacity={0.5} />
-                                </ScatterChart>
-                            </ResponsiveContainer>
+                            <h3 style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f0f4ff', marginBottom: 16 }}>Score Distribution</h3>
+                            {graphsLoading ? (
+                                <div className="skeleton" style={{ height: 280 }} />
+                            ) : dynamicGraphData.distribution.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={280}>
+                                    <BarChart data={dynamicGraphData.distribution} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                                        <XAxis dataKey="bucket" stroke="#5a6a96" fontSize={10} tickLine={false} />
+                                        <YAxis stroke="#5a6a96" fontSize={10} tickLine={false} />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Bar dataKey="count" name="Students" fill="#818cf8" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                                            {dynamicGraphData.distribution.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <p style={{ color: '#5a6a96', fontSize: '0.8125rem' }}>No distribution data available.</p>
+                            )}
                         </div>
                     </div>
                 </div>
-            )}
+            ) : null}
+
+
         </div>
     );
 }

@@ -81,4 +81,11 @@ export const uploadMarksheetOCR = (file) => {
     });
 };
 
+// ── Analytics endpoints (NEW) ───────────────────────────────────
+export const getAnalyticsBoardStats = () => API.get('/analytics/board-stats');
+export const getAnalyticsDashboardDistribution = () => API.get('/analytics/dashboard-distribution');
+export const getAnalyticsNormalizationMetrics = (params) => API.get('/analytics/normalization-metrics', { params });
+export const getAnalyticsDynamicStats = (params) => API.get('/analytics/dynamic-stats', { params });
+export const getAdvancedNormalization = (params) => API.get('/normalization/v2/', { params });
+
 export default API;

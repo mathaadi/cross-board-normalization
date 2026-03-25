@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBoards, normalizeScore } from '../api/client';
+import { getBoards, normalizeScore, getAdvancedNormalization } from '../api/client';
 import ScoreResultCard from '../components/ScoreResultCard';
 import {
     RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -42,15 +42,33 @@ export default function ScoreCalculator() {
         setResult(null);
         setLoading(true);
         try {
-            const res = await normalizeScore({
+            const payload = {
                 board: form.board,
                 subject: form.subject,
                 year: parseInt(form.year),
                 marks: parseFloat(form.marks),
                 max_marks: parseFloat(form.max_marks),
-            });
-            setResult(res.data);
-            setHistory((h) => [{ ...res.data, id: Date.now() }, ...h].slice(0, 10));
+            };
+            const res = await normalizeScore(payload);
+            let combinedResult = { ...res.data };
+            
+            // Fetch V2 Advanced Metrics Additively (Does not replace V1 logic)
+            try {
+                const v2Params = {
+                    board: payload.board, subject: payload.subject, year: payload.year, marks: payload.marks, max_marks: payload.max_marks
+                };
+                const v2Res = await getAdvancedNormalization(v2Params);
+                if (v2Res.data && v2Res.data.data) {
+                    combinedResult.normalized_score_v2 = v2Res.data.data.normalized_score_v2;
+                    combinedResult.advanced_z = v2Res.data.data.z_score;
+                    combinedResult.advanced_percentile = v2Res.data.data.percentile;
+                }
+            } catch (v2Err) {
+                console.warn("V2 normalizer unavailable for this cohort", v2Err);
+            }
+
+            setResult(combinedResult);
+            setHistory((h) => [{ ...combinedResult, id: Date.now() }, ...h].slice(0, 10));
         } catch (err) {
             setError(err.response?.data?.detail || 'Something went wrong');
         } finally {
@@ -60,15 +78,16 @@ export default function ScoreCalculator() {
 
     const radarData = result ? [
         { metric: 'Percentage', v: Math.min(result.percentage_score, 100) },
-        { metric: 'Normalized', v: Math.min(result.normalized_score, 100) },
-        { metric: 'Percentile', v: Math.min(result.percentile, 100) },
-        { metric: 'Z×10+50', v: Math.min(Math.max(50 + result.z_score * 10, 0), 100) },
+        { metric: 'Old Normalized', v: Math.min(result.normalized_score, 100) },
+        { metric: 'V2 Rectified Score', v: Math.min(result.normalized_score_v2 || result.normalized_score, 100) },
+        { metric: 'Percentile (V2)', v: Math.min(result.advanced_percentile || result.percentile, 100) },
+        { metric: 'Z×10+50', v: Math.min(Math.max(50 + (result.advanced_z || result.z_score) * 10, 0), 100) },
     ] : [];
 
     const comparisonData = result ? [
         { name: 'Your Score', value: result.percentage_score, fill: '#6366f1' },
         { name: 'Board Mean', value: result.mean_used, fill: '#06b6d4' },
-        { name: 'Normalized', value: result.normalized_score, fill: '#10b981' },
+        { name: 'V2 Normalization', value: result.normalized_score_v2 || result.normalized_score, fill: '#10b981' },
     ] : [];
 
     return (
@@ -189,8 +208,8 @@ export default function ScoreCalculator() {
                                     <th>Subject</th>
                                     <th>Year</th>
                                     <th style={{ textAlign: 'right' }}>Marks</th>
-                                    <th style={{ textAlign: 'right' }}>Z-Score</th>
-                                    <th style={{ textAlign: 'right' }}>Normalized</th>
+                                    <th style={{ textAlign: 'right' }}>V1 Normalized</th>
+                                    <th style={{ textAlign: 'right', color: '#10b981' }}>V2 Rectified</th>
                                     <th style={{ textAlign: 'right' }}>Percentile</th>
                                 </tr>
                             </thead>
@@ -201,9 +220,9 @@ export default function ScoreCalculator() {
                                         <td>{h.subject}</td>
                                         <td>{h.year}</td>
                                         <td style={{ textAlign: 'right' }} className="num-highlight">{h.marks}/{h.max_marks}</td>
-                                        <td style={{ textAlign: 'right', color: '#818cf8', fontWeight: 600 }} className="num-highlight">{h.z_score.toFixed(3)}</td>
-                                        <td style={{ textAlign: 'right', color: '#34d399', fontWeight: 600 }} className="num-highlight">{h.normalized_score.toFixed(1)}</td>
-                                        <td style={{ textAlign: 'right', color: '#fbbf24', fontWeight: 600 }} className="num-highlight">{h.percentile}%</td>
+                                        <td style={{ textAlign: 'right', color: '#818cf8', fontWeight: 600 }} className="num-highlight">{h.normalized_score.toFixed(1)}</td>
+                                        <td style={{ textAlign: 'right', color: '#10b981', fontWeight: 800 }} className="num-highlight">{(h.normalized_score_v2 || h.normalized_score).toFixed(1)}</td>
+                                        <td style={{ textAlign: 'right', color: '#fbbf24', fontWeight: 600 }} className="num-highlight">{(h.advanced_percentile || h.percentile).toFixed(1)}%</td>
                                     </tr>
                                 ))}
                             </tbody>

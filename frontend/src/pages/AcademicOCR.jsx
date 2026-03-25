@@ -20,6 +20,10 @@ export default function AcademicOCR() {
   const [result, setResult]       = useState(null);
   const [error, setError]         = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [cameraMode, setCameraMode] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
   const inputRef = useRef(null);
 
   const handleFile = (f) => {
@@ -67,7 +71,50 @@ export default function AcademicOCR() {
     setPreview(null);
     setResult(null);
     setError(null);
+    stopCamera();
     if (inputRef.current) inputRef.current.value = '';
+  };
+
+  const startCamera = async () => {
+    try {
+      setCameraMode(true);
+      setError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      setError('Could not access camera. Please check permissions.');
+      setCameraMode(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraMode(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const capFile = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+          handleFile(capFile);
+          stopCamera();
+        }
+      }, 'image/jpeg', 0.9);
+    }
   };
 
   const data = result?.data;
@@ -122,6 +169,21 @@ export default function AcademicOCR() {
               <p style={{ color: '#5a6a96', fontSize: '0.8125rem', marginTop: 4 }}>
                 or click to browse · JPG, PNG, or PDF
               </p>
+              
+              <div style={{ marginTop: 20 }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); startCamera(); }}
+                  style={{
+                    padding: '8px 16px', borderRadius: 8,
+                    background: 'rgba(255,255,255,0.05)', color: '#a78bfa',
+                    border: '1px solid rgba(167,139,250,0.3)',
+                    fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  📷 Open Camera
+                </button>
+              </div>
             </>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -170,6 +232,52 @@ export default function AcademicOCR() {
           )}
         </div>
       </div>
+
+      {/* Camera Modal Overlay */}
+      {cameraMode && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(12,20,40,0.95)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: 500, background: '#111c38', padding: 20, borderRadius: 16 }}>
+            <h3 style={{ color: '#f0f4ff', fontWeight: 700, marginBottom: 16 }}>📷 Capture Marksheet</h3>
+            
+            <div style={{ background: '#000', borderRadius: 12, overflow: 'hidden', width: '100%', aspectRatio: '4/3' }}>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+            
+            <div style={{ display: 'flex', gap: 12, marginTop: 20, justifyContent: 'center' }}>
+              <button
+                onClick={capturePhoto}
+                style={{
+                  padding: '12px 24px', borderRadius: 12,
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none', color: '#fff', fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                📸 Capture Photo
+              </button>
+              <button
+                onClick={stopCamera}
+                style={{
+                  padding: '12px 24px', borderRadius: 12,
+                  background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.3)',
+                  color: '#fb7185', fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (

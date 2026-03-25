@@ -15,6 +15,7 @@ from app.models.models import (
     Board, StudentScore, Organization, Course, CourseType,
 )
 from app.services.normalization import simple_normalize
+from app.services.advanced_normalization_service import compute_advanced_normalization
 from app.services.export_utils import generate_students_csv
 
 router = APIRouter()
@@ -278,9 +279,20 @@ def get_student_details(
     subjects = []
     for score, board_name in records:
         try:
-            norm_score = simple_normalize(score.marks, score.max_marks)
-        except (ValueError, TypeError):
-            norm_score = None
+            # Query the V2 Advanced Normalizer incrementally
+            target_res = compute_advanced_normalization(
+                db, board_name=board_name, subject=score.subject, exam_year=first_record.exam_year,
+                target_marks=score.marks, target_max_marks=score.max_marks
+            )
+            if isinstance(target_res, dict) and "normalized_score_v2" in target_res:
+                norm_score = target_res.get("normalized_score_v2")
+            else:
+                norm_score = simple_normalize(score.marks, score.max_marks)
+        except Exception:
+            try:
+                norm_score = simple_normalize(score.marks, score.max_marks)
+            except Exception:
+                norm_score = None
 
         subjects.append({
             "subject": score.subject,
@@ -310,7 +322,7 @@ def get_student_details(
         "avg_percentage": avg_percentage,
         "avg_normalized_score": avg_normalized,
         "subjects": subjects,
-        "normalization_method": "Min-Max Percentage Scaling: (marks / max_marks) × 100",
+        "normalization_method": "Incremental Normalization V2 (Z-Score Map)",
     }
 
 

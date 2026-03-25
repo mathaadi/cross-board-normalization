@@ -16,7 +16,7 @@ from app.models.models import (
     organization_courses, org_course_type_mapping,
     board_subject_mapping, stream_subject_mapping,
 )
-from app.api import normalization, boards, students, academic, admin, student_extension_routes
+from app.api import normalization, boards, students, academic, admin, student_extension_routes, analytics, advanced_normalization
 from app.services.data_generation import generate_synthetic_students
 
 
@@ -329,6 +329,8 @@ app.include_router(students.router)
 app.include_router(academic.router)
 app.include_router(admin.router)
 app.include_router(student_extension_routes.router)
+app.include_router(analytics.router)
+app.include_router(advanced_normalization.router)
 
 # ── Serve Frontend Static Build ──────────────────────────────────
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
